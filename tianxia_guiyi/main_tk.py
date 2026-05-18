@@ -8,7 +8,23 @@ from tkinter import messagebox, ttk
 
 from constants import COLORS as COLOR_INFO, COLOR_LABEL, PATTERN_SYMBOL
 from game_logic import GameState, Phase, Card
-from ui_effects import SoundManager, ToastBar, animate_dice_roll
+from ui_effects import (
+    SoundManager,
+    ToastBar,
+    animate_dice_roll,
+    celebrate_lock,
+    shake_window,
+)
+
+
+def _lighten(hex_c: str, factor: float = 0.22) -> str:
+    r = int(hex_c[1:3], 16)
+    g = int(hex_c[3:5], 16)
+    b = int(hex_c[5:7], 16)
+    r = min(255, int(r + (255 - r) * factor))
+    g = min(255, int(g + (255 - g) * factor))
+    b = min(255, int(b + (255 - b) * factor))
+    return f"#{r:02x}{g:02x}{b:02x}"
 
 SIDE_BG = "#2a3048"
 CENTER_BG = "#1c2030"
@@ -49,7 +65,6 @@ class TianXiaApp(tk.Tk):
 
         self.msg_var = tk.StringVar(value=self.state.message)
         self.player_panels: list[dict] = []
-        self.progress_bars: dict[str, ttk.Progressbar] = {}
 
         self._build_ui()
         self.toast = ToastBar(self, font=self.font)
@@ -82,7 +97,15 @@ class TianXiaApp(tk.Tk):
             self.toast.show("祝两位征战顺利！", "success")
 
         tk.Button(dlg, text="开始征战", font=self.font_btn, bg="#4a7a5a", fg="white", command=ok).pack(pady=16)
-        dlg.geometry("+%d+%d" % (self.winfo_x() + 200, self.winfo_y() + 120))
+        dlg.update_idletasks()
+        self.update_idletasks()
+        dw = dlg.winfo_reqwidth()
+        dh = dlg.winfo_reqheight()
+        rw = self.winfo_width() or self.winfo_screenwidth()
+        rh = self.winfo_height() or self.winfo_screenheight()
+        rx = self.winfo_rootx() if self.winfo_rootx() > 0 else 0
+        ry = self.winfo_rooty() if self.winfo_rooty() > 0 else 0
+        dlg.geometry(f"+{rx + (rw - dw) // 2}+{ry + (rh - dh) // 2}")
 
     def _build_ui(self):
         top = tk.Frame(self, bg=CENTER_BG)
@@ -131,13 +154,15 @@ class TianXiaApp(tk.Tk):
         )
         order_btn.pack(pady=(0, 8), padx=8)
 
-        action_box = tk.LabelFrame(lf, text="回合操作", font=self.font_sm, fg="#aad4ff", bg=SIDE_BG)
-        action_inner = tk.Frame(action_box, bg=SIDE_BG)
-        action_inner.pack(fill=tk.X, padx=6, pady=6)
-
         hand_lf = tk.LabelFrame(lf, text="手牌", font=self.font_sm, fg="#aaa", bg=SIDE_BG)
+        hand_lf.pack(fill=tk.BOTH, expand=True, padx=8, pady=4)
         hand_inner = tk.Frame(hand_lf, bg=SIDE_BG)
         hand_inner.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+
+        action_box = tk.LabelFrame(lf, text="回合操作", font=self.font_sm, fg="#aad4ff", bg=SIDE_BG)
+        action_box.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=8)
+        action_inner = tk.Frame(action_box, bg=SIDE_BG)
+        action_inner.pack(fill=tk.X, padx=6, pady=6)
 
         self.player_panels.append({
             "player": player_idx, "frame": lf, "info": info, "color_prog": color_prog,
@@ -167,14 +192,16 @@ class TianXiaApp(tk.Tk):
         dice_frame = tk.LabelFrame(mid, text="本回合骰子", font=self.font, fg="#eee", bg=SIDE_BG)
         dice_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(4, 0))
         dice_inner = tk.Frame(dice_frame, bg=SIDE_BG)
-        dice_inner.pack(fill=tk.X, padx=8, pady=8)
+        dice_inner.pack(fill=tk.X, padx=8, pady=(8, 4))
+        dice_actions = tk.Frame(dice_frame, bg=SIDE_BG)
+        dice_actions.pack(fill=tk.X, padx=8, pady=(0, 10))
 
         center_actions = tk.Frame(center, bg=CENTER_BG)
         center_actions.pack(fill=tk.X, pady=4)
 
         log_frame = tk.LabelFrame(center, text="战报", font=self.font_sm, fg="#aaa", bg="#1e2230")
         log_frame.pack(fill=tk.X, pady=4)
-        log_text = tk.Text(log_frame, height=5, font=self.font_sm, bg="#151820", fg="#b8c0d0", wrap=tk.WORD, state=tk.DISABLED)
+        log_text = tk.Text(log_frame, height=10, font=self.font_sm, bg="#151820", fg="#b8c0d0", wrap=tk.WORD, state=tk.DISABLED)
         log_scroll = ttk.Scrollbar(log_frame, command=log_text.yview)
         log_text.configure(yscrollcommand=log_scroll.set)
         log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=4, pady=4)
@@ -183,7 +210,7 @@ class TianXiaApp(tk.Tk):
         return {
             "public_inner": public_inner, "target_labels": target_labels,
             "progress_frame": progress_frame, "dice_inner": dice_inner,
-            "center_actions": center_actions, "log_text": log_text,
+            "dice_actions": dice_actions, "center_actions": center_actions, "log_text": log_text,
         }
 
     def _clear(self, w):
@@ -211,13 +238,24 @@ class TianXiaApp(tk.Tk):
         elif ev == "lock":
             self.toast.show(self.state.message.split("→")[0].strip(), "epic")
             self.sound.lock_color()
+            color = self.state.last_locked_color
+            if color and color in COLOR_INFO:
+                rgb = COLOR_INFO[color]["rgb"]
+                hex_c = "#%02x%02x%02x" % rgb
+                title = f"集齐「{COLOR_LABEL.get(color, color)}」"
+                subtitle = f"+{COLOR_INFO[color]['score']} 分 · 该色锁定"
+                celebrate_lock(self, hex_c, title, subtitle)
         elif ev == "fail":
             self.toast.show(self.state.message.split("→")[0].strip(), "warn")
             self.sound.fail()
+            shake_window(self)
         elif ev == "game_over":
             self.sound.game_over()
 
     def refresh(self):
+        skipped = self.state.maybe_auto_pass()
+        if skipped:
+            self.toast.show(skipped, "warn")
         for i, panel in enumerate(self.player_panels):
             panel["frame"].config(text=self.state.pname(i))
         self.msg_var.set(self.state.message)
@@ -225,6 +263,7 @@ class TianXiaApp(tk.Tk):
         self._refresh_public()
         self._refresh_target()
         self._refresh_dice()
+        self._refresh_dice_actions()
         self._refresh_center_actions()
         self._refresh_log()
         if self.state.phase == Phase.GAME_OVER and not getattr(self, "_game_over_shown", False):
@@ -345,7 +384,18 @@ class TianXiaApp(tk.Tk):
                       bg="#8a6040", fg="white", command=self._restart).pack(pady=4)
         elif s.phase == Phase.CHOOSE_TARGET:
             mode = "抢对手手牌" if self.selecting_opponent else "攻占公共区"
-            tk.Label(self.center_col["center_actions"], text=f"模式：{mode}", font=self.font, fg="#aad4ff", bg=CENTER_BG).pack()
+            tk.Label(
+                self.center_col["center_actions"],
+                text=f"模式：{mode}  ·  点击公共区卡牌；抢牌请用侧栏「抢对手牌」",
+                font=self.font, fg="#aad4ff", bg=CENTER_BG,
+            ).pack()
+            if not self.selecting_opponent:
+                row = tk.Frame(self.center_col["center_actions"], bg=CENTER_BG)
+                row.pack(pady=4)
+                tk.Button(row, text="🎯 选公共区", font=self.font_sm, bg="#4a6a8a", fg="white",
+                          command=lambda: self._set_mode(False)).pack(side=tk.LEFT, padx=4)
+                tk.Button(row, text="⚔ 抢对手牌", font=self.font_sm, bg="#8a4a4a", fg="white",
+                          command=lambda: self._set_mode(True)).pack(side=tk.LEFT, padx=4)
 
     def _refresh_public(self):
         self._clear(self.center_col["public_inner"])
@@ -354,31 +404,99 @@ class TianXiaApp(tk.Tk):
         if not public:
             tk.Label(inner, text="（公共区已空）", font=self.font, fg="#888", bg="#252a3a").pack(pady=20)
             return
+        cols = 5
         row = tk.Frame(inner, bg="#252a3a")
-        row.pack()
+        row.pack(anchor="center", pady=2)
         for i, card in enumerate(public):
-            if i and i % 4 == 0:
+            if i and i % cols == 0:
                 row = tk.Frame(inner, bg="#252a3a")
-                row.pack()
+                row.pack(anchor="center", pady=2)
             locked = self.state.is_color_locked_by_opponent(self.state.current, card.color)
             self._card_button(row, card, enabled=self.state.phase == Phase.CHOOSE_TARGET and not self.selecting_opponent and not locked, locked=locked)
 
     def _card_button(self, parent, card: Card, small=False, enabled=True, locked=False):
         rgb = COLOR_INFO[card.color]["rgb"]
         hex_c = "#%02x%02x%02x" % rgb
-        req_txt = " ".join(f"{PATTERN_SYMBOL.get(k, k[0])}×{v}" for k, v in card.req.items())
+        score = COLOR_INFO[card.color]["score"]
         diff = sum(card.req.values())
-        stars = "★" * min(diff // 4, 3)
-        txt = f"{card.display_id}·{card.color}{stars}\n{req_txt}"
+        stars = "★" * max(1, min((diff - 1) // 3, 3))
+        req_txt = "  ".join(f"{PATTERN_SYMBOL.get(k, k[0])}×{v}" for k, v in card.req.items())
+
+        bg = hex_c if not locked else "#3a3a40"
+        cw_px = 96 if small else 132
+        ch_px = 90 if small else 132
+
+        wrap = tk.Frame(parent, bg=parent.cget("bg") if hasattr(parent, "cget") else CENTER_BG)
+        wrap.pack(side=tk.LEFT, padx=4, pady=3)
+
+        card_frame = tk.Frame(
+            wrap, bg=bg, width=cw_px, height=ch_px,
+            relief=tk.RAISED, bd=2,
+            highlightthickness=0,
+            cursor="hand2" if (enabled and not locked) else "",
+        )
+        card_frame.pack()
+        card_frame.pack_propagate(False)
+
+        title_fg = "#fff" if not locked else "#aaa"
+        sub_fg = "#fff8d0" if not locked else "#999"
+
+        top = tk.Frame(card_frame, bg=bg)
+        top.pack(fill=tk.X, padx=6, pady=(4, 0))
+        tk.Label(top, text=card.display_id, font=self.font_sm, fg=title_fg, bg=bg).pack(side=tk.LEFT)
+        tk.Label(top, text=f"+{score}", font=self.font_sm, fg=sub_fg, bg=bg).pack(side=tk.RIGHT)
+
+        tk.Label(card_frame, text=f"{card.color}  {stars}", font=self.font_sm, fg=title_fg, bg=bg).pack(pady=(2, 2))
+
+        req_lbl = tk.Label(card_frame, text=req_txt, font=self.font_sm, fg=title_fg, bg=bg, wraplength=cw_px - 12, justify=tk.CENTER)
+        req_lbl.pack(pady=(0, 2))
+
         if locked:
-            txt += "\n🔒"
-        tk.Button(
-            parent, text=txt, font=self.font_sm if small else self.font,
-            width=11 if small else 13, height=3 if small else 4,
-            bg=hex_c if not locked else "#444", fg="white", activebackground=hex_c,
-            state=tk.NORMAL if enabled else tk.DISABLED,
-            command=lambda c=card: self._pick_target(c),
-        ).pack(side=tk.LEFT, padx=3, pady=3)
+            tk.Label(card_frame, text="🔒 锁定", font=self.font_sm, fg="#bbb", bg=bg).pack()
+
+        widgets = [card_frame] + list(card_frame.winfo_children())
+        for w in widgets:
+            for c in (w.winfo_children() if w is not card_frame else []):
+                widgets.append(c) if c not in widgets else None
+
+        if enabled and not locked:
+            hover_bg = _lighten(bg)
+            normal_bd = 2
+
+            def fire(_e=None, c=card):
+                self._pick_target(c)
+
+            def on_enter(_e=None):
+                card_frame.config(bd=4, relief=tk.RIDGE, bg=hover_bg)
+                for w in card_frame.winfo_children():
+                    self._recursive_bg(w, hover_bg)
+
+            def on_leave(_e=None):
+                card_frame.config(bd=normal_bd, relief=tk.RAISED, bg=bg)
+                for w in card_frame.winfo_children():
+                    self._recursive_bg(w, bg)
+
+            for w in [card_frame] + self._all_descendants(card_frame):
+                w.bind("<Button-1>", fire)
+                w.bind("<Enter>", on_enter)
+                w.bind("<Leave>", on_leave)
+
+    @staticmethod
+    def _all_descendants(w):
+        out = []
+        for c in w.winfo_children():
+            out.append(c)
+            out.extend(TianXiaApp._all_descendants(c))
+        return out
+
+    @staticmethod
+    def _recursive_bg(w, bg):
+        try:
+            w.config(bg=bg)
+        except tk.TclError:
+            pass
+        for c in w.winfo_children():
+            TianXiaApp._recursive_bg(c, bg)
 
     def _pick_target(self, card: Card):
         ok, msg = self.state.start_assault(card, self.selecting_opponent)
@@ -392,32 +510,67 @@ class TianXiaApp(tk.Tk):
     def _refresh_target(self):
         s = self.state
         self._clear(self.center_col["progress_frame"])
-        self.progress_bars.clear()
         if s.target and s.phase in (Phase.ROLL_DICE, Phase.PLACE_DICE):
-            lines = [f"🎯 {s.target.display_id}（{s.target.color}）"]
+            score = COLOR_INFO[s.target.color]["score"]
+            lines = [f"🎯 {s.target.display_id}（{s.target.color} · +{score}分）"]
             if s.target_from_opponent:
                 lines.append("⚔ 抢牌 +1 虎符")
             self.center_col["target_labels"].config(text="\n".join(lines))
-            if s.phase == Phase.PLACE_DICE:
-                for pat, (have, need) in s.progress_display().items():
-                    row = tk.Frame(self.center_col["progress_frame"], bg="#3a3228")
-                    row.pack(fill=tk.X, pady=2)
-                    sym = PATTERN_SYMBOL.get(pat, pat[0])
-                    done = have >= need
-                    tk.Label(row, text=f"{'✓' if done else '○'} {sym}{pat}", font=self.font_sm,
-                             fg="#8f8" if done else "#ddd", bg="#3a3228", width=10, anchor="w").pack(side=tk.LEFT)
-                    pb = ttk.Progressbar(row, length=140, maximum=max(need, 1), value=min(have, need))
-                    pb.pack(side=tk.LEFT, padx=4)
-                    tk.Label(row, text=f"{have}/{need}", font=self.font_sm, fg="#ccc", bg="#3a3228").pack(side=tk.LEFT)
-                    self.progress_bars[pat] = pb
-            else:
-                for pat, n in s.effective_req(s.target, s.target_from_opponent).items():
-                    row = tk.Frame(self.center_col["progress_frame"], bg="#3a3228")
-                    row.pack(fill=tk.X, pady=1)
-                    tk.Label(row, text=f"· {PATTERN_SYMBOL.get(pat, '')}{pat} ×{n}", font=self.font_sm, fg="#ccc", bg="#3a3228").pack(anchor="w")
+            for pat, (have, need) in s.progress_display().items():
+                row = tk.Frame(self.center_col["progress_frame"], bg="#3a3228")
+                row.pack(fill=tk.X, pady=2)
+                done = have >= need
+                tk.Label(
+                    row, text=f"{'✓' if done else '○'} {pat}",
+                    font=self.font_sm,
+                    fg="#8f8" if done else "#ddd", bg="#3a3228",
+                    width=8, anchor="w",
+                ).pack(side=tk.LEFT)
+                pb = ttk.Progressbar(row, length=140, maximum=max(need, 1), value=min(have, need))
+                pb.pack(side=tk.LEFT, padx=4)
+                tk.Label(
+                    row, text=f"{have}/{need}",
+                    font=self.font_sm, fg="#ccc", bg="#3a3228",
+                ).pack(side=tk.LEFT)
         else:
             who = s.pname(s.current) if s.phase == Phase.CHOOSE_TARGET else "—"
             self.center_col["target_labels"].config(text=f"（{who} 请选择攻占目标）")
+
+    def _refresh_dice_actions(self):
+        """中央骰子区下方的主操作按钮（最醒目）"""
+        self._clear(self.center_col["dice_actions"])
+        bar = self.center_col["dice_actions"]
+        s = self.state
+
+        def big_btn(text, cmd, color="#3d8b5a", enabled=True):
+            tk.Button(
+                bar, text=text, font=self.font_btn, fg="white", bg=color if enabled else "#555",
+                activebackground=color, width=18, height=2, state=tk.NORMAL if enabled else tk.DISABLED,
+                command=cmd, cursor="hand2",
+            ).pack(pady=4)
+
+        if s.phase == Phase.ROLL_DICE and s.dice:
+            n = len(s.dice)
+            big_btn(
+                f"🎲  掷骰（{n} 枚）",
+                self._roll,
+                color="#2d8a4e",
+                enabled=not self._rolling,
+            )
+            tk.Label(
+                bar, text="↑ 点击此处掷骰", font=self.font_sm, fg=ACTIVE_BORDER, bg=SIDE_BG,
+            ).pack()
+        elif s.phase == Phase.PLACE_DICE and s.dice:
+            row = tk.Frame(bar, bg=SIDE_BG)
+            row.pack()
+            for text, cmd, color in [
+                ("✓ 确认放置", self._confirm, "#2d7a8a"),
+                ("🤖 智能选骰", self._smart_pick, "#4a5a8a"),
+                ("✗ 无法放置", self._penalty, "#8a4a4a"),
+            ]:
+                tk.Button(
+                    row, text=text, font=self.font_sm, fg="white", bg=color, width=10, height=2, command=cmd,
+                ).pack(side=tk.LEFT, padx=4, pady=4)
 
     def _refresh_dice(self):
         self._clear(self.center_col["dice_inner"])
@@ -427,7 +580,8 @@ class TianXiaApp(tk.Tk):
         if s.phase not in (Phase.ROLL_DICE, Phase.PLACE_DICE) or not s.dice:
             tk.Label(inner, text="—", font=self.font, fg="#888", bg=SIDE_BG).pack()
             return
-        tk.Label(inner, text=f"⚡ {s.pname(s.current)}", font=self.font_sm, fg=ACTIVE_BORDER, bg=SIDE_BG).pack(anchor="w")
+        hint = "点击下方绿色按钮掷骰" if s.phase == Phase.ROLL_DICE else "勾选骰子后点「确认放置」"
+        tk.Label(inner, text=f"⚡ {s.pname(s.current)}  ·  {hint}", font=self.font_sm, fg=ACTIVE_BORDER, bg=SIDE_BG).pack(anchor="w")
         row = tk.Frame(inner, bg=SIDE_BG)
         row.pack(fill=tk.X, pady=6)
         for i, die in enumerate(s.dice):
@@ -526,6 +680,7 @@ class TianXiaApp(tk.Tk):
             else:
                 self.toast.show(msg or "失去一枚骰子", "warn")
                 self.sound.fail()
+                shake_window(self, intensity=5, times=4)
         self.refresh()
 
     def _restart(self):
