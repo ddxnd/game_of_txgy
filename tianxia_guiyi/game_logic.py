@@ -114,7 +114,8 @@ class GameState:
         self.message: str = "欢迎来到《天下归一》！左右两侧各掷先手骰，点数大者先行。"
         self.winner: Optional[int] = None
         self.log: List[str] = []
-        self.last_event: str = ""  # success | fail | lock | order | normal
+        self.last_event: str = ""  # success | fail | lock | order | normal | warn | game_over
+        self.last_locked_color: Optional[str] = None
         self._init_cards(shuffle_public)
 
     def pname(self, i: int) -> str:
@@ -166,24 +167,58 @@ class GameState:
     def is_color_locked_by_any(self, color: str) -> bool:
         return any(color in p.locked_colors for p in self.players)
 
+    def _has_legal_target(self, player: int) -> bool:
+        for c in self.public_cards():
+            if not self.is_color_locked_by_opponent(player, c.color):
+                return True
+        for c in self.opponent_hand(player):
+            if not self.is_color_locked_by_opponent(player, c.color):
+                return True
+        return False
+
     def game_finished(self) -> bool:
-        return all(c.owner is not None for c in self.public)
+        if all(c.owner is not None for c in self.public):
+            return True
+        if not self._has_legal_target(0) and not self._has_legal_target(1):
+            return True
+        return False
+
+    def _finalize_game_over(self) -> None:
+        self.phase = Phase.GAME_OVER
+        s0, s1 = self.players[0].score, self.players[1].score
+        if s0 > s1:
+            self.winner = 0
+            self.message = f"游戏结束！{self.pname(0)} 获胜（{s0}:{s1}）"
+        elif s1 > s0:
+            self.winner = 1
+            self.message = f"游戏结束！{self.pname(1)} 获胜（{s1}:{s0}）"
+        else:
+            self.winner = None
+            self.message = f"游戏结束！平局（{s0}:{s1}）"
+        self.last_event = "game_over"
+        self.add_log(self.message)
 
     def _check_game_over(self) -> None:
-        if all(c.owner is not None for c in self.public):
-            self.phase = Phase.GAME_OVER
-            s0, s1 = self.players[0].score, self.players[1].score
-            if s0 > s1:
-                self.winner = 0
-                self.message = f"游戏结束！{self.pname(0)} 获胜（{s0}:{s1}）"
-            elif s1 > s0:
-                self.winner = 1
-                self.message = f"游戏结束！{self.pname(1)} 获胜（{s1}:{s0}）"
-            else:
-                self.winner = None
-                self.message = f"游戏结束！平局（{s0}:{s1}）"
-            self.last_event = "game_over"
-            self.add_log(self.message)
+        if self.game_finished():
+            self._finalize_game_over()
+
+    def maybe_auto_pass(self) -> Optional[str]:
+        """当前玩家无可攻占目标 → 跳过；若双方都困死 → 终局。返回提示文本或 None。"""
+        if self.phase != Phase.CHOOSE_TARGET:
+            return None
+        cur = self.current
+        if self._has_legal_target(cur):
+            return None
+        if not self._has_legal_target(1 - cur):
+            self._finalize_game_over()
+            return self.message
+        skipped = self.pname(cur)
+        self.current = 1 - cur
+        self.last_event = "warn"
+        msg = f"⊘ {skipped} 无可攻占目标，自动跳过 → 轮到 {self.pname(self.current)}"
+        self.message = msg
+        self.add_log(msg)
+        return msg
 
     # --- 先手 ---
     def order_roll_whose_turn(self) -> Optional[int]:
@@ -440,6 +475,7 @@ class GameState:
                 self.players[p].locked_colors.add(color)
                 self.players[p].recalc_score()
                 self.last_event = "lock"
+                self.last_locked_color = color
                 self.message = (
                     f"【{flavor}】攻占 {card.display_id}！"
                     f"集齐「{color}」色，+{COLORS[color]['score']} 分！"
