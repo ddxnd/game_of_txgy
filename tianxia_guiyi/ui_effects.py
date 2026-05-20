@@ -82,13 +82,11 @@ class SoundManager:
         if not self.enabled:
             return
         if self._mixer and key in self._cache:
-            import time
             for s in self._cache[key]:
                 if s is None:
                     continue
                 try:
                     s.play()
-                    time.sleep(s.get_length())
                 except Exception:
                     pass
             return
@@ -176,21 +174,30 @@ def animate_dice_roll(
     on_done: Callable[[], None],
     steps: int = 18,
     base_ms: int = 28,
+    interval_ms: Optional[int] = None,
 ) -> None:
-    """掷骰动画：ease-out，前快后慢，配色 + 字形循环切换"""
+    """掷骰动画：ease-out，前快后慢。interval_ms 为兼容旧调用的别名。"""
+    if interval_ms is not None:
+        base_ms = interval_ms
 
     palette = ["#f0d080", "#f6c050", "#ffb060", "#ffd890"]
 
     def tick(step: int = 0) -> None:
         if step < steps:
+            alive = False
             for lw in label_widgets:
                 try:
-                    lw.config(text=random_face_label(), fg=random.choice(palette))
+                    if lw.winfo_exists():
+                        lw.config(text=random_face_label(), fg=random.choice(palette))
+                        alive = True
                 except tk.TclError:
-                    return
+                    pass
+            if not alive:
+                on_done()
+                return
             ratio = step / max(1, steps - 1)
             delay = int(base_ms + (ratio ** 2) * 140)
-            root.after(delay, lambda: tick(step + 1))
+            root.after(delay, lambda s=step + 1: tick(s))
         else:
             on_done()
 

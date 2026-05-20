@@ -501,6 +501,37 @@ class GameState:
             self.message += f" → 轮到 {self.pname(self.current)}。"
         return True, ""
 
+    def skip_turn(self) -> Tuple[bool, str]:
+        """主动跳过本回合：未攻占 / 放弃当前攻占"""
+        if self.phase == Phase.GAME_OVER:
+            return False, "游戏已结束。"
+        p = self.current
+        if self.phase == Phase.CHOOSE_TARGET:
+            self.last_event = "normal"
+            self.current = 1 - p
+            msg = f"⊘ {self.pname(p)} 跳过本回合 → {self.pname(self.current)}"
+            self.message = msg
+            self.add_log(msg)
+            return True, msg
+        if self.phase in (Phase.ROLL_DICE, Phase.PLACE_DICE):
+            card = self.target
+            cid = card.display_id if card else "?"
+            self.target = None
+            self.dice = []
+            self.selected_dice = set()
+            self.progress = {}
+            self.last_event = "fail"
+            self.current = 1 - p
+            self.phase = Phase.CHOOSE_TARGET
+            msg = f"⊘ {self.pname(p)} 放弃攻占 {cid}，跳过本回合 → {self.pname(self.current)}"
+            self.message = msg
+            self.add_log(msg)
+            self._check_game_over()
+            return True, msg
+        if self.phase == Phase.ROLL_ORDER:
+            return False, "定先手阶段不能跳过。"
+        return False, "当前无法跳过。"
+
     def final_summary(self) -> str:
         lines = ["═══ 终局结算 ═══"]
         for i in range(2):
