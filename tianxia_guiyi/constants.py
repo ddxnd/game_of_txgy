@@ -10,7 +10,7 @@ SWORD = "宝剑"
 
 ALL_PATTERNS = [BOW, CATAPULT, TIGER, CHARIOT, SWORD]
 
-# 图案显示符号（无图片时用）
+# 图案显示符号（卡牌上用单字缩写）
 PATTERN_SYMBOL = {
     BOW: "弓",
     CATAPULT: "石",
@@ -18,6 +18,9 @@ PATTERN_SYMBOL = {
     CHARIOT: "车",
     SWORD: "剑",
 }
+
+# 公共区单卡需求总和上限（对应约 5 枚骰子可完成；抢对手牌另 +1 虎符）
+MAX_PUBLIC_REQ_TOTAL = 5
 
 # 四种颜色及同色集齐后的难度积分
 COLORS = {
@@ -27,18 +30,18 @@ COLORS = {
     "金": {"rgb": (210, 170, 50), "score": 6},
 }
 
-# 10 张公共卡：颜色、需求图案、难度（用于展示，积分以颜色为准）
+# 10 张公共卡：每张需求总和 ≤ 5，最高难度为 5
 PUBLIC_CARDS = [
-    {"id": 1, "color": "赤", "req": {BOW: 6, CATAPULT: 1, TIGER: 1, CHARIOT: 2}},
-    {"id": 2, "color": "赤", "req": {BOW: 4, TIGER: 2, CHARIOT: 1}},
-    {"id": 3, "color": "赤", "req": {CATAPULT: 2, TIGER: 2, SWORD: 1}},
-    {"id": 4, "color": "青", "req": {BOW: 5, CATAPULT: 2, CHARIOT: 1}},
-    {"id": 5, "color": "青", "req": {BOW: 3, TIGER: 1, SWORD: 2, CHARIOT: 2}},
-    {"id": 6, "color": "青", "req": {CATAPULT: 3, TIGER: 2}},
-    {"id": 7, "color": "墨", "req": {BOW: 4, CHARIOT: 3, SWORD: 1}},
-    {"id": 8, "color": "墨", "req": {TIGER: 3, CATAPULT: 1, CHARIOT: 2}},
-    {"id": 9, "color": "金", "req": {BOW: 2, CATAPULT: 2, TIGER: 1, SWORD: 1}},
-    {"id": 10, "color": "金", "req": {CHARIOT: 4, SWORD: 2}},
+    {"id": 1, "color": "赤", "req": {BOW: 3, TIGER: 1, CHARIOT: 1}},           # 5
+    {"id": 2, "color": "赤", "req": {BOW: 2, TIGER: 1, CHARIOT: 1}},           # 4
+    {"id": 3, "color": "赤", "req": {CATAPULT: 2, TIGER: 1, SWORD: 1}},        # 4
+    {"id": 4, "color": "青", "req": {BOW: 3, CATAPULT: 1, CHARIOT: 1}},        # 5
+    {"id": 5, "color": "青", "req": {BOW: 2, SWORD: 1, CHARIOT: 2}},           # 5
+    {"id": 6, "color": "青", "req": {CATAPULT: 2, TIGER: 2}},                  # 4
+    {"id": 7, "color": "墨", "req": {BOW: 2, CHARIOT: 2, SWORD: 1}},           # 5
+    {"id": 8, "color": "墨", "req": {TIGER: 2, CATAPULT: 1, CHARIOT: 1}},      # 4
+    {"id": 9, "color": "金", "req": {BOW: 2, CATAPULT: 1, TIGER: 1, SWORD: 1}},  # 5
+    {"id": 10, "color": "金", "req": {CHARIOT: 3, SWORD: 2}},                  # 5
 ]
 
 # 六面骰：面 -> {图案: 数量}，弓箭面可为 2 或 3
@@ -55,7 +58,6 @@ MAX_DICE = 6
 SCREEN_W = 1280
 SCREEN_H = 800
 
-# 随机战况提示（攻占成功等时显示）
 FLAVOR_LINES = [
     "势如破竹！",
     "用兵如神！",
@@ -65,5 +67,8 @@ FLAVOR_LINES = [
     "攻城略地！",
 ]
 
-# 同色进度显示名
 COLOR_LABEL = {"赤": "赤焰", "青": "苍狼", "墨": "玄铁", "金": "金戈"}
+
+
+def card_req_total(req: dict) -> int:
+    return sum(req.values())
