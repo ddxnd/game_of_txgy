@@ -19,42 +19,50 @@ PATTERN_SYMBOL = {
     SWORD: "剑",
 }
 
-# 公共区单卡需求总和上限（对应约 5 枚骰子可完成；抢对手牌另 +1 虎符）
-MAX_PUBLIC_REQ_TOTAL = 5
+# 公共区单卡需求总和上限（本版本按实物卡提升到约 7）
+MAX_PUBLIC_REQ_TOTAL = 7
 
-# 四种颜色及同色集齐后的难度积分
+# 五种颜色及同色集齐后的积分（按图片颜色分布调权）
 COLORS = {
-    "赤": {"rgb": (200, 60, 60), "score": 12},
-    "青": {"rgb": (50, 140, 200), "score": 10},
-    "墨": {"rgb": (70, 70, 90), "score": 8},
-    "金": {"rgb": (210, 170, 50), "score": 6},
+    "绿": {"rgb": (78, 162, 74), "score": 14},
+    "赤": {"rgb": (180, 72, 62), "score": 8},
+    "紫": {"rgb": (112, 74, 170), "score": 10},
+    "蓝": {"rgb": (58, 96, 192), "score": 10},
+    "金": {"rgb": (215, 182, 76), "score": 6},
 }
 
-# 10 张公共卡：每张需求总和 ≤ 5，最高难度为 5
+# 公共区卡牌（按图片从上到下、从左到右重建）
+# 说明：骰盘左侧遮挡区域并无卡牌，实装总数为 14 张
 PUBLIC_CARDS = [
-    {"id": 1, "color": "赤", "req": {BOW: 3, TIGER: 1, CHARIOT: 1}},           # 5
-    {"id": 2, "color": "赤", "req": {BOW: 2, TIGER: 1, CHARIOT: 1}},           # 4
-    {"id": 3, "color": "赤", "req": {CATAPULT: 2, TIGER: 1, SWORD: 1}},        # 4
-    {"id": 4, "color": "青", "req": {BOW: 3, CATAPULT: 1, CHARIOT: 1}},        # 5
-    {"id": 5, "color": "青", "req": {BOW: 2, SWORD: 1, CHARIOT: 2}},           # 5
-    {"id": 6, "color": "青", "req": {CATAPULT: 2, TIGER: 2}},                  # 4
-    {"id": 7, "color": "墨", "req": {BOW: 2, CHARIOT: 2, SWORD: 1}},           # 5
-    {"id": 8, "color": "墨", "req": {TIGER: 2, CATAPULT: 1, CHARIOT: 1}},      # 4
-    {"id": 9, "color": "金", "req": {BOW: 2, CATAPULT: 1, TIGER: 1, SWORD: 1}},  # 5
-    {"id": 10, "color": "金", "req": {CHARIOT: 3, SWORD: 2}},                  # 5
+    {"id": 1, "color": "绿", "req": {BOW: 2, TIGER: 2, CATAPULT: 2, CHARIOT: 1}},
+    {"id": 2, "color": "赤", "req": {BOW: 3, TIGER: 2, CATAPULT: 2}},
+    {"id": 3, "color": "赤", "req": {BOW: 3, TIGER: 2}},
+    {"id": 4, "color": "金", "req": {BOW: 4, TIGER: 1}},
+    {"id": 5, "color": "紫", "req": {TIGER: 3, CATAPULT: 1}},
+    {"id": 6, "color": "紫", "req": {BOW: 3, TIGER: 2}},
+    {"id": 7, "color": "金", "req": {BOW: 3, TIGER: 1, SWORD: 2}},
+    {"id": 8, "color": "蓝", "req": {BOW: 2, TIGER: 2, CATAPULT: 2, CHARIOT: 1}},
+    {"id": 9, "color": "蓝", "req": {TIGER: 1, SWORD: 2, CATAPULT: 2}},
+    {"id": 10, "color": "金", "req": {BOW: 2, TIGER: 1, CATAPULT: 2, SWORD: 1}},
+    {"id": 11, "color": "赤", "req": {BOW: 1, TIGER: 1, CATAPULT: 2, SWORD: 2}},
+    {"id": 12, "color": "赤", "req": {TIGER: 2, SWORD: 2}},
+    {"id": 13, "color": "赤", "req": {BOW: 1, TIGER: 2, CATAPULT: 2, SWORD: 1}},
+    {"id": 14, "color": "金", "req": {TIGER: 1, CATAPULT: 2, SWORD: 1}},
 ]
 
-# 六面骰：面 -> {图案: 数量}，弓箭面可为 2 或 3
+# 六面骰（每颗骰子的六面）
+# 参考图片可见面：含虎符、弓箭、投石器、马车、宝剑，并有 1 个弓箭重复面
 DIE_FACES = [
-    {BOW: 2},
-    {BOW: 3},
+    {BOW: 1},
+    {BOW: 1},
     {TIGER: 1},
     {CATAPULT: 1},
     {CHARIOT: 1},
     {SWORD: 1},
 ]
 
-MAX_DICE = 6
+# 每回合图案骰数量（按你提供图片改为 7 枚）
+MAX_DICE = 7
 SCREEN_W = 1280
 SCREEN_H = 800
 
@@ -67,7 +75,13 @@ FLAVOR_LINES = [
     "攻城略地！",
 ]
 
-COLOR_LABEL = {"赤": "赤焰", "青": "苍狼", "墨": "玄铁", "金": "金戈"}
+COLOR_LABEL = {
+    "绿": "青岚",
+    "赤": "赤焰",
+    "紫": "紫霄",
+    "蓝": "苍浪",
+    "金": "金戈",
+}
 
 
 def card_req_total(req: dict) -> int:

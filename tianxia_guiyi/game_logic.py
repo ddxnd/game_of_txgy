@@ -96,7 +96,7 @@ class PlayerState:
 
 
 class GameState:
-    def __init__(self, shuffle_public: bool = True):
+    def __init__(self, shuffle_public: bool = False):
         self.public: List[Card] = []
         self.players: List[PlayerState] = [PlayerState(), PlayerState()]
         self.player_names: List[str] = ["玩家一", "玩家二"]

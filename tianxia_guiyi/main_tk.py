@@ -33,7 +33,7 @@ RULES_TEXT = """《天下归一》规则摘要
 
 【先手】双方各掷 1d6，大者先行；相同则重掷。
 
-【回合】选公共区卡或抢对手手牌（需多 1 虎符）→ 掷 6 枚图案骰 → 选骰放置（公共区卡最多约 5 枚骰可完成）→ 可随时点「跳过本回合」放弃。
+【回合】选公共区卡或抢对手手牌（需多 1 虎符）→ 掷 7 枚图案骰 → 选骰放置（公共区卡需求更贴近实体卡）→ 可随时点「跳过本回合」放弃。
 
 【积分】仅当集齐某颜色全部卡牌时，获得该色难度分（赤12/青10/墨8/金6），并锁定该色不让对手再抢。
 
@@ -436,7 +436,7 @@ class TianXiaApp(tk.Tk):
 
         def side_btn(text, cmd, enabled=True, color="#4a7a5a"):
             tk.Button(
-                inner, text=text, font=self.font_sm, width=16,
+                inner, text=text, font=self.font_sm, width=13, height=1,
                 bg=color if enabled else self.t("btn_disabled_bg"), fg="white",
                 state=tk.NORMAL if enabled else tk.DISABLED, command=cmd,
             ).pack(pady=3, fill=tk.X)
@@ -637,25 +637,44 @@ class TianXiaApp(tk.Tk):
         bar = self.center_col["dice_actions"]
         s = self.state
 
-        def big_btn(text, cmd, color="#3d8b5a", enabled=True):
+        def big_btn(text, cmd, color="#3d8b5a", enabled=True, width=14):
             tk.Button(
                 bar, text=text, font=self.font_btn, fg="white", bg=color if enabled else self.t("btn_disabled_bar"),
-                activebackground=color, width=18, height=2, state=tk.NORMAL if enabled else tk.DISABLED,
+                activebackground=color, width=width, height=1, state=tk.NORMAL if enabled else tk.DISABLED,
                 command=cmd, cursor="hand2",
             ).pack(pady=4)
 
         if s.phase == Phase.ROLL_DICE and s.dice:
             n = len(s.dice)
-            big_btn(
-                f"🎲  掷骰（{n} 枚）",
-                self._roll,
-                color="#2d8a4e",
-                enabled=not self._rolling,
-            )
+            row = tk.Frame(bar, bg=self.t("side"))
+            row.pack(pady=2)
+            tk.Button(
+                row,
+                text=f"🎲 掷骰（{n} 枚）",
+                font=self.font_btn,
+                fg="white",
+                bg="#2d8a4e" if not self._rolling else self.t("btn_disabled_bar"),
+                activebackground="#2d8a4e",
+                width=14,
+                height=1,
+                state=tk.NORMAL if not self._rolling else tk.DISABLED,
+                command=self._roll,
+                cursor="hand2",
+            ).pack(side=tk.LEFT, padx=(0, 6), pady=2)
+            tk.Button(
+                row,
+                text="⊘ 跳过本回合",
+                font=self.font_sm,
+                fg="white",
+                bg="#6a5a4a",
+                width=11,
+                height=1,
+                command=self._skip_turn,
+                cursor="hand2",
+            ).pack(side=tk.LEFT, pady=2)
             tk.Label(
                 bar, text="↑ 掷骰  ·  Shift+滚轮 可横向滑动骰子", font=self.font_sm, fg=self.t("accent"), bg=self.t("side"),
             ).pack()
-            big_btn("⊘ 跳过本回合", self._skip_turn, color="#6a5a4a")
         elif s.phase == Phase.PLACE_DICE and s.dice:
             row = tk.Frame(bar, bg=self.t("side"))
             row.pack()
@@ -669,7 +688,15 @@ class TianXiaApp(tk.Tk):
                     row, text=text, font=self.font_sm, fg="white", bg=color, width=9, height=2, command=cmd,
                 ).pack(side=tk.LEFT, padx=3, pady=4)
         elif s.phase == Phase.CHOOSE_TARGET:
-            big_btn("⊘ 跳过本回合", self._skip_turn, color="#6a5a4a")
+            big_btn("⊘ 跳过本回合", self._skip_turn, color="#6a5a4a", width=12)
+
+    @staticmethod
+    def _die_face_text(die) -> str:
+        txt = die.pattern_key() if die.face_idx >= 0 else "?"
+        if "×" not in txt:
+            return txt
+        pat, cnt = txt.split("×", 1)
+        return f"{pat}\n×{cnt}"
 
     def _refresh_dice(self):
         self._clear(self.center_col["dice_inner"])
@@ -680,25 +707,23 @@ class TianXiaApp(tk.Tk):
             tk.Label(inner, text="—", font=self.font, fg=self.t("text_faint"), bg=self.t("side")).pack()
             return
         n = len(s.dice)
-        compact = n > 4
-        dice_font = tkfont.Font(family="Microsoft YaHei", size=10 if compact else 13, weight="bold")
-        pad = 2 if compact else 5
-        cell_w = 3 if compact else 4
+        dice_font = tkfont.Font(family="Microsoft YaHei", size=11, weight="bold")
 
         hint = "点击下方绿色按钮掷骰" if s.phase == Phase.ROLL_DICE else "勾选后点「确认放置」"
         tk.Label(inner, text=f"⚡ {s.pname(s.current)}  ·  {hint}", font=self.font_sm, fg=self.t("accent"), bg=self.t("side")).pack(anchor="w")
         row = tk.Frame(inner, bg=self.t("side"))
         row.pack(fill=tk.X, pady=4)
         for i, die in enumerate(s.dice):
-            cell = tk.Frame(row, bg=self.t("dice_cell"), relief=tk.RAISED, bd=1 if compact else 2)
-            cell.pack(side=tk.LEFT, padx=pad)
-            txt = die.pattern_key() if die.face_idx >= 0 else "?"
+            cell = tk.Frame(row, bg=self.t("dice_cell"), relief=tk.RAISED, bd=2, width=66, height=76)
+            cell.pack(side=tk.LEFT, padx=4, pady=2)
+            cell.pack_propagate(False)
+            txt = self._die_face_text(die)
             lbl = tk.Label(
                 cell, text=txt, font=dice_font,
                 fg=self.t("accent") if die.face_idx >= 0 else self.t("text_faint"),
-                bg=self.t("dice_cell"), width=cell_w, height=1 if compact else 2,
+                bg=self.t("dice_cell"), width=5, height=2, justify=tk.CENTER,
             )
-            lbl.pack(padx=3 if compact else 6, pady=3 if compact else 6)
+            lbl.pack(padx=4, pady=(4, 2))
             self._dice_anim_labels.append(lbl)
             if s.phase == Phase.PLACE_DICE:
                 var = tk.BooleanVar(value=i in s.selected_dice)
@@ -710,7 +735,10 @@ class TianXiaApp(tk.Tk):
                     else:
                         s.selected_dice.discard(idx)
                         lb.config(bg=self.t("dice_cell"))
-                cb = tk.Checkbutton(cell, variable=var, bg=self.t("dice_cell"), selectcolor=self.t("dice_selected"), command=toggle)
+                cb = tk.Checkbutton(
+                    cell, variable=var, bg=self.t("dice_cell"),
+                    selectcolor=self.t("dice_selected"), command=toggle,
+                )
                 if i in s.selected_dice:
                     lbl.config(bg=self.t("dice_selected"))
                 cb.pack()
